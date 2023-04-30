@@ -1,0 +1,1091 @@
+---
+title: "Protest & Property"
+subtitle: "CPLN505 Final Project"
+author: "Charlie Townsley"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    theme: flatly
+    highlight: breezedark
+    code_folding: hide
+    code_download: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+knitr::opts_knit$set(root.dir = "C:/Users/ctown/OneDrive - PennO365/Classes/Classes_Sem4_2023Spring/CPLN505_Planning by Numbers/Assignments/Final Project/Data")
+rm(list=ls())
+
+options(scipen = 999) #turn off scientific notation
+```
+
+```{r packages, results='hide'}
+#Load packages
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(ggcorrplot)
+library(sf)
+library(gridExtra)
+library(viridis) 
+library(ggfx)
+library(DT)
+library(reactable)
+library(stargazer)
+library(caret)
+library(plotROC)
+library(ModelMetrics)
+```
+
+```{r themes and colors, results = "hide", echo=FALSE}
+
+mapTheme <- theme(plot.title =element_text(size=12),
+                  plot.subtitle = element_text(size=8),
+                  plot.caption = element_text(size = 6),
+                  axis.line=element_blank(),
+                  axis.text.x=element_blank(),
+                  axis.text.y=element_blank(),
+                  axis.ticks=element_blank(),
+                  axis.title.x=element_blank(),
+                  axis.title.y=element_blank(),
+                  panel.background=element_blank(),
+                  panel.border=element_blank(),
+                  panel.grid.major=element_line(colour = 'transparent'),
+                  panel.grid.minor=element_blank(),
+                  legend.direction = "vertical", 
+                  legend.position = "right",
+                  plot.margin = margin(1, 1, 1, 1, 'cm'),
+                  legend.key.height = unit(1, "cm"), legend.key.width = unit(0.2, "cm"))
+
+plotTheme <- theme(
+  plot.title =element_text(size=12),
+  plot.subtitle = element_text(size=8),
+  plot.caption = element_text(size = 6),
+  axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+  axis.text.y = element_text(size = 10),
+  axis.title.y = element_text(size = 10),
+  # Set the entire chart region to blank
+  panel.background=element_blank(),
+  plot.background=element_blank(),
+  #panel.border=element_rect(colour="#F0F0F0"),
+  # Format the grid
+  panel.grid.major=element_line(colour="#D0D0D0",size=.75),
+  axis.ticks=element_blank())
+
+#Get individual viridis colors
+library(scales)
+Vcolors =  viridis(2, option = "B", begin = 0, end = 0.8)
+
+#Color Palettes
+palette1 <- "#FCA50AFF"
+palette2 <- c("#08051DFF", "#FCA50AFF")
+palette3 <- c("#08051DFF", "#9E2964FF", "#FCA50AFF")
+palette4 <- c("#08051DFF", "#6B186EFF", "#CC4248FF", "#FCA50AFF")
+palette5 <- c("#08051DFF", "#520E6DFF", "#9E2964FF", "#E05536FF", "#FCA50AFF")
+
+```
+
+# Introduction
+
+This project seeks to explore spatial relationships between sites of protest and property damage in Minneapolis during the uprising that followed the murder of George Floyd by members of the city’s police department on May 25th, 2020. Almost immediately, protests against police brutality swept across the city, before being echoed across
+the world, and numbered well into the thousands.^1^ This period also saw the largest deployment of national guard troops in the state’s history, significant property damage, and an outpouring of mutual aid.^2^
+
+This project builds on work I began with the Twin Cities chapter of the Architecture Lobby, a national architecture advocacy association, while living in Minneapolis during the summer of 2020. The project began with data collection as the city processed the protests that had just shaken its streets and the brutal murder of an unarmed Black man that had triggered them. I continued the project for my grad school GIS final in the fall of 2021 by mapping the gathered data. This project builds on this previous work by adding statistical analysis of the data and introducing new mapping methods.
+
+As this work is ongoing, so is my own process of understanding my Whiteness in the context of being a planner and researcher interested in advancing social justice. As a result, this project may suffer from blind spots and biases I have yet to fully address.
+
+<br>
+
+## Research Question
+
+The research question this project seeks to address is as follows:
+
+>Were locations of damaged properties from the 2020 protests in Minneapolis over George Floyd’s murder simply a result of police station locations and protest sites, or were other factors also predictors of where protest damage occurred?
+
+The null hypothesize is that property damage during protests was simply a result of random proximity to the flashpoints that protest sites and police stations became during that time.
+
+The alternative hypothesis, informed by prior work, is that property type, neighorhood characteristics, and even racial bias could have been significant predictors of which properties ultimately were damaged and which werent.
+
+The planning implications of this work relate to how and where planners can best support communities in having a voice in their cities. This is especially relevant in the U.S. context, where racially divided cities greatly outnumber their opposites and where the country's racial minorities continue to face severe systemic oppression.
+
+<br>
+
+## Literature Overview
+
+In the words of the scholar Cathy Lisa Schneider:  
+
+>"Riots are the last resort for those who find all other paths to justice blocked."^3^
+
+This research follows a large body of existing work on the geography and history of urban riots - one that is too great to go into here in any depth. However, this work seeks to honor Schneider's sentiment through in depth analysis of the paths to justice that patterns of protest and property damage might reveal as missing or blocked.
+
+Contemporary scholarship on mass protests and riots shows how public space has played a crucial role in protests across time and geography as “the battlefield on which the conflicting interests of the rich and poor are set.”^4^ Often, these protests are reactions against a history of “colonists and capitalists appropriating the land of the indigenous and indigent.”^5^ Furthermore, researchers have found that most demonstration sites fall into the same categories: “outside governmental buildings to communicate with the authorities; at centers of commercial activity to appeal to the public; to places that link them historically, culturally or morally with symbolically important events; or at places connected with a particular grievance.”^6^  Police stations, commercial corridors, and the various locations of the demonstrations mapped in this project all fall into these categories.
+
+Therefore, the protests and ensuing property damage that occurred in Minneapolis in 2020 are part of a long and global lineage of the body politic seeking power through mass congregation and collective action in public space. In the context of Minneapolis however, there was a collective sense that these protests (and riots) were specifically “a challenge to the continued marginalization of Black, Indigenous, and other spaces of color through disinvestment and neglect by the state.”^7^
+
+While some scholars argue for "abandoning race as a variable",^8^ this project include % White. The justification for doing so is an attempt to highlight the uneven burden shared by White and BIPOC communities in Minneapolis following the protests. While fear of urban unrest spread into the suburbs, White enclaves even within city limits saw few negative outcomes.
+
+<br>
+
+## Project Outline
+
+The project uses a fishnet methodology to aggregate data to the level of a grid cell, and then use those grid cells for processing, model building, and analysis.  The project uses binomial logit regression models to analyze the probability of the independent variables affecting a binary outcome: damaged or not damaged.
+
+The projects workflow is as follows:
+
+1. Create Fishnet
+
+2. Engineer Features in ArcGIS (feature -> raster -> table)
+
+3. Import and join features in R
+
+3. Process and explore data
+
+4. Select Variables
+
+5. Test variables for correlation
+
+6. Build and Iterate Binomial Logit Models
+
+7. Test model prediction accuracy
+
+8. Interpret Results
+
+<br>
+<br>
+
+# Data
+
+## Data Sources
+
+This project draws from the following data sources:  
+
+* A "[Damaged Properties](https://opendata.minneapolismn.gov/datasets/cityoflakes::damaged-properties-public/about)" feature layer from the Minneapolis open data portal 
+
+* A [Police Stations](https://opendata.minneapolismn.gov/datasets/police-stations/explore) feature layer from the Minneapolis open data portal  
+
+* A Dataset of [all Minneapolis parcels](https://gis-hennepin.hub.arcgis.com/datasets/county-parcels/explore) with use, taxable value, and primary taxpayer address from the Hennepin County open data portal   
+
+* Median Household income and race data from the U.S. Census Bureau's 2020 5-Year ACS 
+
+<br>
+
+## Variables
+
+The unit of analysis is a 1/8 mile diameter fishnet grid cell.
+
+The dependent variable is damage status (damaged vs. not).
+
+The independent variables of interest are:  
+* Property type (commercial or not)  
+* Damaged properties  
+* Distance from Protest Site  
+* Distance from Police Station  
+* Absentee ownership  
+* Taxable property value  
+* % White  
+* Median HH Income  
+
+<br>
+
+
+## Data Processing
+
+```{r load data and plot it, warning = FALSE, message = FALSE}
+#damaged parcels
+parcels_dmg <- read_sf("Processed/ParcelsWithDmg_shp/Parcels_wDmg.shp")
+
+#all parcels in Minneapolis
+#parcels_all <- read_sf("Processed/Minneapolis_Parcels_2021/Minneapolis_Parcels_2021.shp")
+
+#msp boundary
+msp_boundary <- read_sf("Raw/City_Boundary-shp/16cdbbfa-ad10-493c-afaf-52b61f2e76e42020329-1-180h9ap.whbo.shp")
+
+msp_boundary <- msp_boundary %>% 
+  st_transform(crs = 6505)
+```
+
+The city of Minneapolis collected a dataset of properties that were damaged during the four-day period of greatest unrest between May 25th and May 29th, 2020. The dataset lists 1182 damaged properties.
+
+While this dataset is relatively small, to run binomial logit regressions, we need to compare damaged properties to all properties in the city, of which there are over 129,000!
+
+## Create Fishnet
+To aggregate data and speed processing time, I created a grid of 1/8 mile fishnet cells that covers Minneapolis (shown below).
+
+```{r create fishnet, eval=FALSE, results='hide', echo=FALSE}
+#Skip this when running
+msp_fishnet <- st_make_grid(msp_boundary,
+                        cellsize = 660,
+                        square = FALSE) %>%  
+ .[msp_boundary] %>% 
+  st_sf() %>% 
+  mutate(uniqueID = rownames(.))
+
+st_write(msp_fishnet, "Processed/msp_fishnet/msp_fishnet.shp", geometry = TRUE, append = FALSE)
+```
+
+
+```{r plot msp fishnet}
+msp_fishnet <- st_read("Processed/msp_fishnet/msp_fishnet.shp")
+
+msp_fishnet <- msp_fishnet %>%
+  st_transform(crs = 6505)
+
+map_1 <- 
+ggplot()+
+  geom_sf(data = msp_fishnet,
+          fill = "lightgrey") +
+  geom_sf(data = msp_boundary, 
+          color = "black", fill = "transparent") +
+  mapTheme
+
+map_1
+```
+<br>
+
+## Feature Engineering: From Arc to R
+
+After creating the fishnet for Minneapolis, I exported it as a shapefile for processing in ArcGIS. There, I turned each feature into a raster layer and then used the Zonal Statistics as Table tool to aggregate the values of each raster by fishnet cell. I then exported these tables of zonal statistics and brought them back into R where I joined each table with the fishnet file.
+
+```{r load in features from arc}
+#Load in features that were engineered in arc
+damaged <- read_csv("Processed/ZonalStatsTables/ZonalStats_dmgdprcls.csv") %>% 
+  dplyr::select(uniqueID, SUM) %>% 
+  mutate(damaged = ifelse(SUM > 1, 1, 0)) %>% 
+  rename(dmg_SUM = SUM)
+
+commercial_count <- read_csv("Processed/ZonalStatsTables/ZonalStats_commercial2.csv") %>% 
+  dplyr::select(uniqueID, SUM) %>% 
+  rename(cmmrcl_sum = SUM)
+
+commercial_binary <- read_csv("Processed/ZonalStatsTables/ZonalStats_CmrclCrdr.csv") %>% 
+  dplyr::select(uniqueID, CmmrclCrdr) %>% 
+  rename(cmmrcl_binary = CmmrclCrdr)
+
+dist_protest <- read_csv("Processed/ZonalStatsTables/ZonalStats_dist_protest.csv") %>% 
+  dplyr::select(uniqueID, MIN) %>% 
+  rename(DIST_PRTST = MIN)
+
+dist_police <- read_csv("Processed/ZonalStatsTables/ZonalStats_dist_police.csv") %>% 
+  dplyr::select(uniqueID, MIN) %>% 
+  rename(DIST_POLC = MIN)
+
+TAXVALUE <- read_csv("Processed/ZonalStatsTables/ZonalStats_taxvalue.csv") %>% 
+  dplyr::select(uniqueID, MEAN) %>% 
+  rename(value_mean = MEAN)
+
+absentee <- read_csv("Processed/ZonalStatsTables/ZonalStats_AbsenteeOwners.csv") %>% 
+  dplyr::select(uniqueID, SUM) %>% 
+  rename(absntee_sum = SUM)
+
+hhIncome <- read_csv("Processed/ZonalStatsTables/ZonalStats_hhincome_acs_2020.csv") %>% 
+  dplyr::select(uniqueID, MEDIAN) %>% 
+  rename(hhIncome_med = MEDIAN)
+  
+pctWhite <- read_csv("Processed/ZonalStatsTables/ZonalStats_pctWhite_acs_2020.csv") %>% 
+  dplyr::select(uniqueID, MEDIAN) %>% 
+  rename(pctWhite_med = MEDIAN)
+
+#Join features with fishnet and remove NAs
+dat <- msp_fishnet %>%
+  mutate(uniqueID = as.integer(uniqueID)) %>% 
+  left_join(commercial_count, by = "uniqueID") %>% 
+  left_join(commercial_binary, by = "uniqueID") %>% 
+  left_join(damaged, by = "uniqueID") %>%
+  left_join(dist_protest, by = "uniqueID") %>% 
+  left_join(dist_police, by = "uniqueID") %>% 
+  left_join(TAXVALUE, by = "uniqueID") %>% 
+  left_join(absentee, by = "uniqueID") %>% 
+  left_join(hhIncome, by = "uniqueID") %>% 
+  left_join(pctWhite, by = "uniqueID") %>% 
+  na.omit()
+
+#log adjust
+dat$value_log <- log(dat$value_mean)
+#replace infinite values with zeros
+dat$value_log[sapply(dat$value_log, is.infinite)] <- 0
+
+#display as interactive table
+reactable(dat, defaultPageSize = 5)
+```
+
+# Exploratory Analysis
+
+## Maps
+
+Below are maps of each of the features:
+
+```{r maps 1, fig.height=8}
+#Create layer with just damaged property cells
+fishnet_dmg <- dat %>% 
+  filter(damaged == 1)
+
+#Set map projection
+dat <- dat %>%
+  st_transform(crs = 6505)
+
+map_2 <-
+ggplot() +
+  geom_sf(data = dat, aes(fill=as.factor(damaged)), alpha = 0.8, color = "transparent") +
+  scale_fill_viridis(labels = c('Not Damaged', 'Damaged'),
+                      alpha = .75,
+                      begin = 0.05,
+                      end = 0.8,
+                      direction = 1,
+                      discrete = TRUE,
+                      option = "B") +
+  geom_sf(data=msp_boundary,
+          fill = "transparent",
+          color = "#474747",
+          size = .5) +
+  geom_sf(data=fishnet_dmg,
+          fill = "transparent",
+          color = "white",
+          size = .25) +
+  labs(title ="Damaged Properties",
+       fill = "Status",
+       caption = "Source: opendata.minneapolismn.gov") +
+  mapTheme
+
+map_2
+```
+
+For damaged properties, I summed the area of damaged property by cell, and then said any cell containing more than 3 raster pixels of damaged properties is damaged, and every other cell isn't. Therefore, after this step, damaged fishnet cells have a value of 1 and undamaged cells have a value of zero.
+
+```{r maps commercial, fig.height=8, fig.width=8}
+#Set map projection
+dat <- dat %>%
+  st_transform(crs = 6505)
+
+map_6 <-
+grid.arrange(ncol = 2,
+ggplot() +
+  geom_sf(data = dat, aes(fill=as.factor(cmmrcl_binary)), alpha = 0.8, color = "transparent") +
+  scale_fill_viridis(labels = c('No', 'Yes'),
+                      alpha = .75,
+                      begin = 0.05,
+                      end = 0.8,
+                      direction = 1,
+                      discrete = TRUE,
+                      option = "B") +
+  geom_sf(data=msp_boundary,
+          fill = "transparent",
+          color = "#474747",
+          linewidth = .5) +
+  geom_sf(data=fishnet_dmg,
+          fill = "transparent",
+          color = "white",
+          size = .25) +
+  labs(title ="On Commercial\nCorridor",
+       fill = "Status",
+       caption = "Source: opendata.minneapolismn.gov") +
+  mapTheme,
+
+ggplot() +
+  geom_sf(data = dat, aes(fill=cmmrcl_sum), alpha = 0.8, color = "transparent") +
+  scale_fill_viridis(
+                     alpha = .75,
+                     begin = 0,
+                     end = 0.9,
+                     direction = 1,
+                     discrete = FALSE,
+                     option = "B") +
+  geom_sf(data=msp_boundary,
+          fill = "transparent",
+          color = "#474747",
+          linewidth = .5) +
+  geom_sf(data=fishnet_dmg,
+          fill = "transparent",
+          color = "white",
+          size = .25) +
+  labs(title ="Commercial Properties",
+       fill = "Count",
+       caption = "Source: gis-hennepin.hub.arcgis.com") +
+  mapTheme
+)
+```
+
+For cells on a commercial corridor, I used ArcGIS to set any cell that intersected with a commercial corridor to 1. To create the commercial properties variable, I simply summed the number of commercial raster pixels by fishnet cell. As a result, this variable approximates the commercial area of each cell.
+
+```{r maps 2, fig.height=8, fig.width=8}
+dat <- dat %>%
+  st_transform(crs = 6505)
+
+map_3 <-
+grid.arrange(ncol = 2,
+ggplot() +
+  geom_sf(data = dat, aes(fill=DIST_PRTST), alpha = 0.8, color = "transparent") +
+  scale_fill_viridis(
+                      alpha = .75,
+                      begin = 0,
+                      end = 0.9,
+                      direction = -1,
+                      discrete = FALSE,
+                      option = "B") +
+  geom_sf(data=msp_boundary,
+          fill = "transparent",
+          color = "#474747",
+          size = .5) +
+  geom_sf(data=fishnet_dmg,
+          fill = "transparent",
+          color = "white",
+          size = .25) +
+  labs(title ="Distance from Protest Sites",
+       fill = "Distance (ft)",
+       caption = "Source: Mapping Protest 2020") +
+  mapTheme,
+
+ggplot() +
+  geom_sf(data = dat, aes(fill=DIST_POLC), alpha = 0.8, color = "transparent") +
+  scale_fill_viridis(
+                      alpha = .75,
+                      begin = 0,
+                      end = 0.9,
+                      direction = -1,
+                      discrete = FALSE,
+                      option = "B") +
+  geom_sf(data=msp_boundary,
+          fill = "transparent",
+          color = "#474747",
+          size = .5) +
+  geom_sf(data=fishnet_dmg,
+          fill = "transparent",
+          color = "white",
+          size = .25) +
+  labs(title ="Distance from Police Stations",
+       fill = "Distance (ft)",
+       caption = "Source: opendata.minneapolismn.gov") +
+  mapTheme
+)
+             
+```
+
+To create the distance from protest sites and police stations variables, I assigned each cell the minimum distance it contained. This was to avoid under sampling this key metric.
+
+
+```{r maps 3, fig.height=8, fig.width=10}
+dat <- dat %>%
+  st_transform(crs = 6505)
+
+map_4 <- 
+grid.arrange(ncol = 2,
+             
+ggplot() +
+  geom_sf(data = dat, aes(fill=value_log), alpha = 0.8, color = "transparent") +
+  scale_fill_viridis(
+                      alpha = .75,
+                      begin = 0.05,
+                      end = 0.85,
+                      direction = 1,
+                      discrete = FALSE,
+                      option = "B") +
+  geom_sf(data=msp_boundary,
+          fill = "transparent",
+          color = "#474747",
+          size = .5) +
+  geom_sf(data=fishnet_dmg,
+          fill = "transparent",
+          color = "white",
+          size = .25) +
+  labs(title ="Mean Taxable Value (log)",
+       fill = "Value ($)",
+       caption = "Source: gis-hennepin.hub.arcgis.com") +
+  mapTheme,
+
+ggplot() +
+  geom_sf(data = dat, aes(fill=absntee_sum), alpha = 0.8, color = "transparent") +
+  scale_fill_viridis(
+                      alpha = .75,
+                      begin = 0,
+                      end = 0.9,
+                      direction = 1,
+                      discrete = FALSE,
+                      option = "B") +
+  geom_sf(data=msp_boundary,
+          fill = "transparent",
+          color = "#474747",
+          size = .5) +
+  geom_sf(data=fishnet_dmg,
+          fill = "transparent",
+          color = "white",
+          size = .25) +
+  labs(title ="Non MSP Resident Owned Properties",
+       fill = "Count",
+       caption = "Source: gis-hennepin.hub.arcgis.com") +
+  mapTheme
+)
+```
+
+To create the property value variable, I took the mean value of the raster pixels in each cell (here they're shown log-transformed for greater clarity).
+
+Calculating absentee ownership was a little more involved. I wanted to include this variable to test the narrative that properties with absentee owners recieved more damage than others. Unlike the other variables this proect examines, absentee ownership was not an existing field in the parcels dataset. Including this variable in the analysis required coming up with a methodology for classifying properties with owners who did not live near their properties. This project defines parcels with absentee owners as any parcel where the primary taxpayer's address is not in Minneapolis. The code chunk below contains my method.
+
+```{r absentee ownership, eval=FALSE, results='hide'}
+#Skip this
+parcels_owner <- parcels_all %>% 
+  dplyr::select(OBJECTID, PID, ZIP_CD, TAXPAYER_1, TAXPAYER_2, TAXPAYER_3)
+
+parcels_owner$owner_msp <- 
+  ifelse(grepl("MINNEAPOLIS", parcels_owner$TAXPAYER_2) |
+         grepl("MINNEAPOLIS", parcels_owner$TAXPAYER_3) |
+         grepl("MPLS", parcels_owner$TAXPAYER_2) |
+         grepl("MPLS", parcels_owner$TAXPAYER_3) 
+         , 1,0)
+
+parcels_owner <- parcels_owner %>% 
+  mutate(owner_mn = case_when(
+    (grepl("MN", TAXPAYER_2) | grepl("MN", TAXPAYER_3)) & owner_msp != 1 ~ 1,
+    TRUE ~ 0
+  ))
+
+parcels_owner <- parcels_owner %>% 
+  mutate(owner_non_mn = ifelse((owner_msp == 1 | owner_mn ==1), 0, 1))
+
+parcels_owner <- parcels_owner %>% 
+  mutate(owner_non_msp = case_when(
+    owner_non_mn == 1 | owner_mn == 1 & owner_msp == 0 ~ 1,
+    TRUE ~ 0
+  ))
+
+write_sf(parcels_owner, "Processed/parcels_ownership/parcels_byowner.shp")
+```
+
+```{r maps 4, fig.height=8, fig.width=8}
+dat <- dat %>%
+  st_transform(crs = 6505)
+
+map_5 <- 
+grid.arrange(ncol = 2,
+             
+ggplot() +
+  geom_sf(data = dat, aes(fill=hhIncome_med), alpha = 0.8, color = "transparent") +
+  scale_fill_viridis(alpha = .75,
+                    begin = 0.05,
+                    end = 0.85,
+                    direction = 1,
+                    discrete = FALSE,
+                    option = "B") +
+  geom_sf(data=msp_boundary,
+          fill = "transparent",
+          color = "#474747",
+          size = .5) +
+  geom_sf(data=fishnet_dmg,
+          fill = "transparent",
+          color = "white",
+          size = .25) +
+  labs(title ="Median Household Income",
+       fill = "Value ($)",
+       caption = "Source: 2020 5-Year ACS") +
+  mapTheme,
+
+ggplot() +
+  geom_sf(data = dat, aes(fill=pctWhite_med), alpha = 0.8, color = "transparent") +
+  scale_fill_viridis(alpha = .75,
+                    begin = 0,
+                    end = 0.9,
+                    direction = 1,
+                    discrete = FALSE,
+                    option = "B") +
+  geom_sf(data=msp_boundary,
+          fill = "transparent",
+          color = "#474747",
+          size = .5) +
+  geom_sf(data=fishnet_dmg,
+          fill = "transparent",
+          color = "white",
+          size = .25) +
+  labs(title ="% White Population",
+       fill = "%",
+       caption = "Source: 2020 5-Year ACS") +
+  mapTheme
+)
+```
+
+Finally, to incorporate census variables I set each cell equal to the median value of the raster pixels within it for both median household income and % of the populatin that identified as White in 2020.
+
+```{r export maps, include = FALSE, eval = FALSE}
+ggsave("C:/Users/ctown/OneDrive - PennO365/Classes/Classes_Sem4_2023Spring/CPLN505_Planning by Numbers/Assignments/Final Project/Graphics/Maps/PP_Map1_Fishnet.pdf", plot = map_1)
+
+ggsave("C:/Users/ctown/OneDrive - PennO365/Classes/Classes_Sem4_2023Spring/CPLN505_Planning by Numbers/Assignments/Final Project/Graphics/Maps/PP_Maps2_Dmg.pdf", plot = map_2, width = 11)
+
+ggsave("C:/Users/ctown/OneDrive - PennO365/Classes/Classes_Sem4_2023Spring/CPLN505_Planning by Numbers/Assignments/Final Project/Graphics/Maps/PP_Maps3_dstnc.pdf", plot = map_3, width = 11)
+
+ggsave("C:/Users/ctown/OneDrive - PennO365/Classes/Classes_Sem4_2023Spring/CPLN505_Planning by Numbers/Assignments/Final Project/Graphics/Maps/PP_Maps4_VluAbsntee.pdf", plot = map_4, width = 11)
+
+ggsave("C:/Users/ctown/OneDrive - PennO365/Classes/Classes_Sem4_2023Spring/CPLN505_Planning by Numbers/Assignments/Final Project/Graphics/Maps/PP_Maps5_IncmWht.pdf", plot = map_5, width = 11)
+
+ggsave("C:/Users/ctown/OneDrive - PennO365/Classes/Classes_Sem4_2023Spring/CPLN505_Planning by Numbers/Assignments/Final Project/Graphics/Maps/PP_Maps6_Commercial.pdf", plot = map_6, width = 11)
+```
+
+<br>
+
+## Plots
+
+Once I had all of the variables created and mapped, I made a series of charts to better understand the data.
+
+```{r damaged vs. not count}
+#How many damaged fishent cells vs. not?
+chart_2 <-
+ggplot(dat, aes(x = as.factor(damaged), fill = as.factor(damaged), stat = "count")) +
+  geom_bar(alpha = 0.8) +
+  scale_fill_manual(values = c("#f3a108", "#4c0073"),
+                    labels = c("Not Damaged", "Damaged"),
+                    name = "Presence of\nDamage") +
+  xlab("Damaged vs. Not") + 
+  ylab("Count") +
+  labs(title="Cells Containing Damage",
+       subtitle = "Count of Fishnet Cells that Do and Don't Contain Damaged Properties") +
+  theme_bw()
+
+chart_2
+```
+
+Right away it is clear that there are far more undamaged fishnet cells than damaged ones. 
+
+```{r % damaged, results='hide'}
+cells_w_dmg <- as.numeric(sum(dat$damaged == 1))
+```
+
+In fact, just 213 out of the 4,430 fishnet cells (4.8%) fishnet cells contain damaged properties. That sample size is a little small, so hopefully it won't be a problem.
+
+```{r damage by level}
+#How many properties with each kind of damage?
+chart_1 <-
+ggplot(parcels_dmg, aes(x = dmg_lvl, fill = dmg_lvl, stat = "count")) +
+  geom_bar(alpha = 0.8) +
+  scale_fill_manual(values = c("#4c0073", "#f3a108", "#f27405", "#d93d04"),
+                    labels = c("Destroyed", "Minor", "Moderate", "Severe"),
+                    name = "Damage\nLevel") +
+  xlab("Damage Level") + 
+  ylab("Count") +
+  labs(title="Property Damage by Level") +
+  theme_bw()
+
+chart_1
+```
+
+
+Even though I'm working with damage as a binary, I was curious about what kind of damage is most represented in the data. Plotting this reveals that:  
+
+* 918 of them received "minor" damage  
+
+* 216 received "moderate" damage  
+
+* 12 received "severe" damage  
+
+* 36 were "destroyed"  
+
+To get back on track though, how do the damaged vs. not damaged cells compare to each other for each variable of interest?
+
+```{r plots data spread, fig.height=6, fig.width=8}
+#Pivot to visualize with violin plot
+dat_plotvars <- dat %>% 
+  as.data.frame() %>%
+    dplyr::select(damaged, cmmrcl_sum, cmmrcl_binary, DIST_PRTST, DIST_POLC, value_mean, value_log,
+                  absntee_sum, hhIncome_med, pctWhite_med) %>% 
+    pivot_longer(cols = -damaged)
+
+#violin plots
+chart_3 <-
+ggplot(dat_plotvars) + 
+     geom_violin(aes(x = as.factor(damaged), 
+                  y = value, fill = as.factor(damaged))) + 
+     facet_wrap(~name, scales = "free_y") +
+     labs(x="Damage Status", y="Value") + 
+     scale_fill_manual(values = c("#f3a108", "#4c0073"),
+     labels = c("Not Damaged", "Damaged"), name = "") +
+  plotTheme
+
+chart_3
+```
+
+These violin plots show that some variables exhibit greater difference across damage status than others. It also shows the importance of log adjusting the value variable to be able to make meaningful comparisons by compressing outliers.
+
+<br>
+
+# Variable Selection
+
+Based on the data engineering and initial exploration, these are the independent variable candidates I would like to include in a binomial regression model:
+
+* Concentration of commercial property `cmmrcl_sum`  
+* Location on a commercial corridor `cmmrcl_binary` (as a binary variable)  
+* Distance from Protest Sites `DIST_PRTST`  
+* Distance from Police Stations `DIST_POLC`  
+* Mean property value `value_mean`
+* Log adjusted property value `value_log`  
+* Concentration of Absentee Ownership `absntee_sum`  
+* % of population that is White `pctWhite_med`  
+* Median Household Income `hhIncome_med`  
+
+The exploratory analysis suggests that these variables relate to protest property damage. However, I need to make sure none of them are too correlated with the dependent variable or each other (collinear) to avoid model error.
+
+<br>
+
+## Test for Correlation
+
+```{r correlation matrix, fig.height=6, fig.width=10}
+#make matrix of variables to test
+corr_vars <- dat %>% 
+  as.data.frame() %>% 
+  dplyr::select(-uniqueID, -geometry, -dmg_SUM) %>%
+  mutate(cmmrcl_binary = as.integer(cmmrcl_binary),
+         damaged = as.integer(damaged)) %>% 
+  rename("Absentee Ownership" = absntee_sum,
+         "Property Value" = value_mean,
+         "Property Value (log)" = value_log,
+         "Distance from Protest Sites" = DIST_PRTST,
+         "Distance from Police Stations" = DIST_POLC,
+         "Commercial Properties" = cmmrcl_sum,
+         "Commercial Corridors" = cmmrcl_binary,
+         "Presence of Damaged Properties" = damaged,
+         "Median Household Income" = hhIncome_med,
+         "Pop % White" = pctWhite_med)
+
+#compute correlation matrix
+cormatrix <- cor(corr_vars) %>% 
+  round(., 2)
+
+#plot a correlogram
+chart_4 <-
+ggcorrplot(cormatrix,
+           method = "square",
+           hc.order = FALSE,
+           colors = c("#f3a108", "white", "#4c0073"),
+           outline.color = "white",
+           type = "lower",
+           tl.cex = 9,
+           lab = TRUE)
+
+chart_4
+```
+
+Median Household Income is collinear with Population % White and distance from police stations. Therefore, I will include % White in models moving forward because it's slightly more correlated with presence of damaged properties and will make for less complicated modeling.
+
+Fortunately, the rest of these variables avoid colinearity with each other. The strongest correlation is between distance from protests and distance from police stations. This makes sense since some protests occurred at police stations. However, not all protests did so the correlation between them is still below 0.5, meaning both can stay in the model without worry.
+
+Additionally, we see that the variables most correlated with property damage are: 
+
+* Commercial Corridors  
+* Distance from police stations  
+* Distance from protest sites  
+* Absentee Ownership, and  
+* Property Value  
+
+```{r export charts, include = FALSE, eval = FALSE}
+ggsave("C:/Users/ctown/OneDrive - PennO365/Classes/Classes_Sem4_2023Spring/CPLN505_Planning by Numbers/Assignments/Final Project/Graphics/Charts/PP_Chart1_DmgbyLvl.pdf", plot = chart_1, width = 11)
+
+ggsave("C:/Users/ctown/OneDrive - PennO365/Classes/Classes_Sem4_2023Spring/CPLN505_Planning by Numbers/Assignments/Final Project/Graphics/Charts/PP_Chart2_DmgCount.pdf", plot = chart_2, width = 11)
+
+ggsave("C:/Users/ctown/OneDrive - PennO365/Classes/Classes_Sem4_2023Spring/CPLN505_Planning by Numbers/Assignments/Final Project/Graphics/Charts/PP_Chart3_Violin.pdf", plot = chart_3, width = 11)
+
+ggsave("C:/Users/ctown/OneDrive - PennO365/Classes/Classes_Sem4_2023Spring/CPLN505_Planning by Numbers/Assignments/Final Project/Graphics/Charts/PP_Chart4_CorrPlot.pdf", plot = chart_4, width = 11)
+```
+
+<br>
+
+# Logistic Regressions
+
+I chose to use binomial logistic regression for this assignment because it is a type of statistical model that is well suited to analyzing relationships between a binary response variable and one or more predictor variables. It estimates the probability of the response variable taking one of the two possible values (in this case damaged or not damaged) based on the values of the predictor variables.
+
+Before making any models, I first turned the binary variables into factors. These are my depedent damage variable and the commercial corridor variable.
+
+```{r dat into factor}
+dat$damaged <- as.factor(dat$damaged) 
+dat$cmmrcl_binary <- as.factor(dat$cmmrcl_binary)
+
+#Convert the distance variables units from feet to miles
+dat$DIST_POLC <- dat$DIST_POLC/5280
+dat$DIST_PRTST <- dat$DIST_PRTST/5280
+```
+
+The first model includes all eight variables of interest:
+
+* `cmmrcl_binary`  
+* `cmmrcl_sum`  
+* `DIST_PRTST`  
+* `DIST_POLC`  
+* `value_mean`  
+* `value_log`  
+* `absntee_sum`  
+* `pctWhite_med`
+
+## Model 1
+
+
+```{r mod1}
+mod1 <- glm(damaged ~ cmmrcl_sum + cmmrcl_binary + DIST_PRTST + DIST_POLC + value_mean + value_log + absntee_sum + pctWhite_med, 
+            family="binomial"(link="logit"), data = dat)
+summary(mod1)
+```
+The results indicate:  
+
+* The p-values indicate statistical significance for all of the variables except for `value_mean`.  
+* The AIC of this model is 1244.7. When selecting between regression models, the model with the lower AIC better fits the data.  
+
+### Automated Variable Selection
+
+It appears that `value_mean` is not significant and therefore should be excluded from the model. Let's confirm via automated variable selection with `drop1`.
+
+```{r drop1}
+drop1(mod1, test="Chisq")
+```
+The `drop1` results indicate that removing `value_mean` would not increase the model's deviance and would actually lower its AIC, meaning it would improve the model's fit.
+
+## Model 2
+
+So, what changes if `value_mean` is excluded?
+
+```{r mod2}
+mod2 <- glm(damaged ~ cmmrcl_sum + cmmrcl_binary + DIST_PRTST + DIST_POLC + value_log + absntee_sum + pctWhite_med, 
+            family="binomial"(link="logit"), data = dat)
+summary(mod2)
+```
+Good news, dropping `value_mean` decreased the AIC by 2 from Model 1's AIC of 1244.7. This means Model 2 describes the data better than Model 1 but with 1 fewer variable.
+
+However, `pctWhite_med` is still less significant than the other variables. What happens if this variable is excluded from the next model? Based on the `drop1` results, the AIC should increase slightly (by 4?).
+
+## Model 3
+
+```{r mod3}
+mod3 <- glm(damaged ~ cmmrcl_sum + cmmrcl_binary + DIST_PRTST + DIST_POLC + value_log + absntee_sum, 
+            family="binomial"(link="logit"), data = dat)
+summary(mod3)
+```
+The AIC increased slightly this time (by 3.8) from Model 2's AIC of 1242.7. Since this is a minor increase, a model without `value_mean` or `pctWhite_med` functionally describes the data as a well as a model with them.
+
+Now all of the variables have at least a high level of significance. However, `absntee_sum` is less significant than the others. What happens if `absntee_sum` is dropped from the model?
+
+
+## Model 4
+
+```{r mod4}
+mod4 <- glm(damaged ~ cmmrcl_sum + cmmrcl_binary + DIST_PRTST + DIST_POLC + value_log, 
+            family="binomial"(link="logit"), data = dat)
+summary(mod4)
+```
+This time, all of the variables are highly significant and the AIC has increased by 7.5 from the previous model's AIC of 1246.5.
+
+Before selecting a final model, was `pctWhite_med` actually a better predictor than its collinear pair `hhIncome_med`?
+
+
+## Model 5
+
+```{r mod5}
+mod5 <- glm(damaged ~ cmmrcl_sum + cmmrcl_binary + DIST_PRTST + DIST_POLC + value_log + absntee_sum + hhIncome_med, 
+            family="binomial"(link="logit"), data = dat)
+summary(mod5)
+```
+Replacing `pctWhite_med` with `hhIncome_med` in the last model that it was part of (Model 2) shows that it in fact is less significant of a predictor. This fifth model's AIC is higher than that of the model that included % White, meaning Model 2 described the data better than Model 5 does.
+
+Time to select the final model.
+
+
+## Selecting a Final Model
+
+Comparing the fit of the models with `anova` helps determines which model to select as the final model. Because `anova` can only compare nested models, Model 5 is not included. This is ok because Model 5 was the weakest model anyway.
+
+```{r Check fit with ANOVA}
+anova(mod1, mod2, mod3, mod4, test="Chisq")
+```
+The Analysis of Deviance table from ANOVA compares the fit of the models against each other. The p-values indicate that Model 2 does not describe the data meaningfully differently than Model 1. However, they show that Model 3 describes the data meaningfully differently than Model 2 and Model 4 describes the data significantly differently than Model 3. Because the second model's deviance is smaller than that of Models 3 and 4 and the same as Model 1, Model 2 describes the data the best with the fewest possible variables.
+
+However, the deviance of all models is smaller than the null deviance of 1652.2. So, every model describes the variation in the data better than an intercept only model.
+
+```{r stargazer, results='asis'}
+stargazer(mod1, mod2, mod3, mod4, type="text", digits = 2, single.row = FALSE, out = "C:/Users/ctown/OneDrive - PennO365/Classes/Classes_Sem4_2023Spring/CPLN505_Planning by Numbers/Assignments/Final Project/Graphics/Charts/PP_Stargazer.html")
+```
+<br>
+
+Model 2 has the lowest AIC of all the models and all of its variables are significant. Therefore, Model 2 is selected as the final model.
+
+<br>
+<br>
+
+# Regression Interpretation
+
+So what do these regression results mean anyway?
+
+## Coefficients
+
+```{r interpret coeficient mod_Cc}
+#if exp(coef) = .8:  a unit increase in X is associated with 
+#a 20% decline in the odds ratio
+#if exp(coef)  = 1.5:  a unit increase in X is associated with 
+#a 50% increase in the odds ratio
+100 * (exp(coef(mod2))-1)
+```
+
+The coefficients of the model suggest that:
+
+* All else equal, a one unit increase in the area of commercial properties in a fishnet cell **increases** the odds ratio of a cell containing damaged properties by 2.1%.  
+
+* All else equal, the odds ratio of a cell on a commercial corridor being damaged is 411.8% **higher** than for a cell not on a commercial corridor.  
+
+* All else equal, a one unit (1 mile) increase in distance from a protest site **decreases** the odds ratio of a cell containing damaged properties by 45.3%.
+
+* All else equal, a one unit (1 mile) increase in distance from a police station **decreases** the odds ratio of a cell containing damaged properties by 37.9%.
+
+* All else equal, a one unit increase in property value **increases** the odds ratio of a cell containing damaged properties by 0.2% (15.8/100 because the variable is log-adjusted).
+
+* All else equal, a unit increase in the presence of absentee owned properties **increases** the odds ratio of a cell containing damaged properties by 1.5%.
+
+* All else equal, a unit (1%) increase in the share of White residents in a cell **decreases** the odds ratio of a cell containing damaged properties by 59.3%.
+
+While all of these variables are significant, it is worth noting the variables with the largest coefficients. These are presence of a commercial corridor `cmmrcl_binary1`, distance from a protest site `DIST_PRTST` or police station `DIST_POLC`, and the share of population in a given cell that's White `pctWhite_med`.
+
+It is also important to note that the coefficient for the intercept is quite large, meaning there is still much of the variation in the data that the selected variables do not explain.
+
+Ultimately, the most important result of running these models is the ability to reject the null hypothesis that a model that only includes distance from protest sites and police stations predicts protest property damage better than a model that includes other variables.
+
+<br>
+
+## Prediction Accuracy
+
+```{r confusion matrix}
+#Create dataframe to hold predicted probabilities
+pred <- as.data.frame(fitted(mod2))
+pred <- mutate(pred, "obs" = dat$damaged)
+pred <- rename(pred, "prob" = "fitted(mod2)")
+pred <- mutate(pred, "pred" = ifelse(prob < 0.5, 0, 1)) #if predicted probabilities are <0.5, then classify as zero, otherwise classify as 1
+
+#Create confusion matrix
+caret::confusionMatrix(reference = as.factor(pred$obs), 
+                       data = as.factor(pred$pred), 
+                       positive = "1")
+```
+Calculating our model's prediction accuracy gives us an accuracy rate of 95% - pretty good! But is it too good?
+
+We see that the model considerably under predicts the likelihood of a fishnet cell containing damaged properties. So the accuracy rate says more about the small sample size of damaged properties than the generalizability of the model.
+
+
+## Mapping Predictions
+```{r k_fold, results='hide'}
+
+ctrl <- trainControl(method = "cv", 
+                     number = 100, 
+                     savePredictions = TRUE)
+
+dmgFit <- train(as.factor(damaged) ~ .,
+               data = dat %>% 
+                 as.data.frame() %>%
+                 dplyr::select(damaged, cmmrcl_sum, cmmrcl_binary, DIST_PRTST, DIST_POLC, value_log,
+                absntee_sum, pctWhite_med) %>% 
+               na.omit(),
+               method="glm", family="binomial",
+               trControl = ctrl)
+dmgFit
+#inundFit is our model trained to predict using the binomial logistic regression, or glm, method. 
+```
+
+```{r pred map setup, results='hide'}
+dat_map <- dat %>% 
+  dplyr::select(uniqueID, damaged, cmmrcl_sum, cmmrcl_binary, DIST_PRTST, DIST_POLC, value_log,
+                absntee_sum, pctWhite_med, geometry)
+
+allPredictions <- 
+  predict(dmgFit, dat, type="prob")[,2]
+  
+dat_pred <- 
+  cbind(dat_map, allPredictions) %>%
+  mutate(allPredictions = round(allPredictions * 100)) 
+
+dat_pred <- dat_pred %>%
+  mutate(confResult=case_when(allPredictions < 50 & damaged==0 ~ "True Negative",
+                              allPredictions >= 50 & damaged==1 ~ "True Positive",
+                              allPredictions < 50 & damaged==1 ~ "False Negative",
+                              allPredictions >= 50 & damaged==0 ~ "False Positive"))
+```
+ 
+
+```{r pred map, fig.width=10, fig.height=8}
+dat_pred <- dat_pred %>%
+  st_transform(crs = 6505)
+
+grid.arrange(ncol = 2,
+ ggplot() + 
+    geom_sf(data=dat_pred, aes(fill=allPredictions), 
+            colour=NA) +
+      scale_fill_viridis(
+                      alpha = .8,
+                      begin = 0,
+                      end = 0.9,
+                      direction = 1,
+                      discrete = FALSE,
+                      option = "B",
+                      name="Predicted\nProbabilities (%)") +
+  labs(title="Predicted Probability of Property Damage",
+       subtitle = "Based on a Logistic Regression Model") +
+     mapTheme,
+ 
+ ggplot()+
+  geom_sf(data=dat_pred,
+          aes(fill = confResult), color = "transparent", alpha = .8) +
+  scale_fill_manual(values = c("#6B186EFF", "#CC4248FF", "#000004FF", "#FCA50AFF"),
+                    name="Outcomes")+
+  labs(title="Confusion Metrics",
+       subtitle = "Based on a Probability >= 50%") +
+  mapTheme
+)
+```
+Mapping where and how well the model predicts protest property damage shows that how the cutoff for prediction accuracy is defined is very important. The map on the left of predicted probabilities seems to closely reflect the actual (or observed) patterns of property damage. However, mapping the confusion metrics on the right with a cutoff of 50% probability counts many of the cells that are highlighted in orange on the lefthand map as false negatives.
+
+A 50% probability threshold is a reasonable threshold for prediction however. Since it is unwise to count cells with a less than 50% probability of being damaged as "likely" to be damaged.
+
+These maps visually reinforce the conclusion of the confusion matrix. Namely, that while the model does capture basic patterns of protest property damage based on the independent variables included in it, it is still not accurately predicting overall. This shows that more variables and further testing are needed to better understand the quantitative relationships between protest property damage and factors related to land use and socioeconomic geographic traits.
+
+<br>
+
+# Limitations
+
+The fishnet methdology speeds processing, but sacrifices precision and makes interpreting the model's results somewhat convoluted. For example, with the fishnet approach it is not possible to create a true binary variable for commercial vs. non-commercial properties as it would be if simply running regressions on the parcels themselves. Instead, the area of damaged properties had to be summed by fishnet grid cell as an approximation.
+
+In another iteration of the project, it would be interesting to see if having smaller grid cells could improve the results. For example, a diameter of 160' would give four times the number of cells. It would be interesting to see if R could still efficiently process a dataframe of 16,000. This would be a big increase from the 4,000 used in this project, but would still be a significantly smaller dataset than the 130,000 parcels within Minneapolis city limits.
+
+Another limitation of this study is the course definition of absentee ownership. Ideally, the absentee ownership variable would be able to account for more nuance than the simple distinction of whether or not the primary taxpayer's address was in city boundaries. Ideally, a property's distance from its primary taxpayer would be used instead. This would capture a much more detailed and consistent relationship. However, doing so for every parcel in Minneapolis exceeded the time and processing power available for this project.
+
+Now that this project has established a significant relationship between damaged properties and commercial land use, a logical next step is to examine which kinds of businesses were most damaged. Not having business type data at the property parcel level is a limitation of this study.
+
+The large coefficient of the intercept highlights that more variables are necessary to accurately model the data. Other variables to include in future work, in addition to business type, are more rich socioeconomic and land-use descriptors. For example, is the importance of commercial corridors in the model because of density of stores or something else? And, how might the identity of affected areas, their relationship to the city's power structures, and the communities that watched over them relate to level of damage received? Mobility could also be an important factor. Might transit access and walkability have positively correlated with protest damage?
+
+Finally, this is not a story of numbers. Ideally a project like this would be providing data that supports or adds nuance to a robust qualitative research project that centers the stories of those most affected by George Floyd's murder at the hands of the Minneapolis Police Department and the destruction that followed.
+
+<br>
+
+# Planning Implications
+
+This project shows that the property damage related to the protests against George Floyd's murder in Minneapolis in 2020 was not simply a matter of proximity to protest sites. Instead, it indicates that commercial corridors were significant locations of protest damage and protest damage in White enclaves was conspiciously absent.
+
+While the presence of commercial *properties* was related to protest damage with statistical significance, it is noteworthy that location on a commercial corridor was a much stronger predictor of damage. This suggests that perception of public space may have a stronger effect than its actual use. It also emphasizes that commercial corridors are key nodes of public expression and identity in urban environments. In particular, the results of this research suggest that when protesters struggle for agency in a capitalist society where commerce and power are deeply interwoven, the commercial corridors of society itself are likely to become contested ground. Therefore, planners would do well to support initiatives that strengthen community identity and provide spaces for movement building on commercial corridors. Arguably, the Minneapolis public did not have enough constructive avenues for city leaders to hear and respond to their anger in 2020. This research suggests that commercial corridors are key sites for city planners to provide or encourage accessible and meaningful connections between the public and civic power structures.
+
+Similarly, the fact that the share of White population in an area had a significant negative relationship with protest damage speaks to the identity of a place being an important factor during the Minneapolis protests of 2020. It lends statistical weight to the idea that the racial and economic segregation of U.S. cities that has historically concentrated affluence and power in largely White neighborhoods may also have concentrated protests within the city's economically or racially marginalized communities. It is important to recognize that White and BIPOC Minneapolitans did not equally suffer the consequences of destruction following the protests. Therefore, city planners have an imperative to concentrate efforts at rebuilding and reconciliation in areas with low shares of White residents.
+
+While the coefficients for absentee ownership and property value were small, they show that these were also statistically significant factors during the protests. The fact that absentee ownership is a statistically significant variable lends credence to a common narrative among protestors that property damage was an expression of anger and frustration targeted at capitalist power structures rather than local business owners. The slight correlation between property damage and high property value further supports this hypothesis. Together, these factors suggest that supporting and increasing access to local business ownership could have a long-term stabilizing effect in cities. Increasing access to local ownership of high value property perhaps even more so.
+
+These observations are meant to be exploratory rather than definitive. I hope this piece can serve as a jumping off point for those continuing the study of spatial characteristics of protest in Minneapolis.
+
+<br>
+<br>
+
+# References
+
+1. Boone, Anna. “One Week in Minneapolis.” Star Tribune. June 3, 2020.                     
+https://www.startribune.com/george-floyd-death-ignited-protests-far-beyond-minneapolis-police-minnesota/569930771/.
+
+2. Bakst, Brian. “Guard Mobilized Quickly, Adjusted on Fly for Floyd Unrest.” MPR News, July 10, 2020. https://www.mprnews.org/story/2020/07/10/guard-mobilized-quickly-adjusted-on-fly-for-floyd-unrest.
+
+3. Schneider, Cathy Lisa. 2017. Police Power and Race Riots: Urban Unrest in Paris and New York.
+Reprint edition. Philadelphia, Pa: University of Pennsylvania Press.
+
+4. Springer, Simon. “Public Space as Emancipation: Meditations on Anarchism, Radical Democracy, Neoliberalism and Violence.” Antipode 43, no. 2 (2011): 525–62. https://doi.org/10.1111/j.1467-8330.2010.00827.x.
+
+5. McDonagh, Briony, and Carl J. Griffin. “Occupy! Historical Geographies of Property, Protest and the Commons, 1500–1850.” Journal of Historical Geography 53 (July 1, 2016): 1–10. https://doi.org/10.1016/j.jhg.2016.03.002.
+
+6. Salmenkari, Taru. “Geography of Protest: Places of Demonstration in Buenos Aires and Seoul.” Urban Geography 30, no. 3 (April 1, 2009): 239–60. https://doi.org/10.2747/0272-3638.30.3.239.
+
+7. Smiles, Deondre. “George Floyd, Minneapolis, and Spaces of Hope and Liberation.” Dialogues in Human Geography 11, no. 2 (July 1, 2021): 165–69. https://doi.org/10.1177/20438206211027466.
+
+8. Fullilove, M T. “Comment: Abandoning ‘Race’ as a Variable in Public Health Research--an Idea Whose Time Has Come.” American Journal of Public Health 88, no. 9 (September 1998): 1297–98.
+
